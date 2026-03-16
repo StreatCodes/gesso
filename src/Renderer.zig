@@ -7,7 +7,7 @@ const msl_code = @embedFile("shaders/renderer.msl");
 const Renderer = @This();
 
 const Vertex = extern struct { x: f32, y: f32 };
-const Node = extern struct { background_color: sdl3.pixels.FColor };
+const FragmentUniforms = extern struct { background_color: sdl3.pixels.FColor };
 
 window: sdl3.video.Window,
 graphics_pipeline: gpu.GraphicsPipeline,
@@ -140,8 +140,8 @@ pub fn render(renderer: *Renderer, device: gpu.Device, elements: []const Element
     command_buffer.pushVertexUniformData(0, std.mem.asBytes(&screen_size));
 
     for (elements, 0..) |elem, i| {
-        const node = Node{ .background_color = .{ .r = elem.background_color.r, .g = elem.background_color.g, .b = elem.background_color.b, .a = elem.background_color.a } };
-        command_buffer.pushFragmentUniformData(0, std.mem.asBytes(&node));
+        const uniforms = FragmentUniforms{ .background_color = elem.background_color };
+        command_buffer.pushFragmentUniformData(0, std.mem.asBytes(&uniforms));
         render_pass.drawPrimitives(6, 1, @intCast(i * 6), 0);
     }
 
