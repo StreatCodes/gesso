@@ -1,9 +1,11 @@
+const std = @import("std");
 const sdl3 = @import("sdl3");
 const gpu = sdl3.gpu;
 const video = sdl3.video;
 const events = sdl3.events;
 const Renderer = @import("Renderer.zig");
 const Element = @import("Element.zig");
+const layout = @import("layout.zig");
 
 pub fn init(title: [:0]const u8, screen_width: u32, screen_height: u32) !Instance {
     try sdl3.init(.{ .video = true });
@@ -41,14 +43,18 @@ const Instance = struct {
     }
 
     /// Blocks until the next input event. Returns false when the app should close.
-    pub fn handleInput(instance: *Instance) !bool {
+    pub fn handleInput(instance: *Instance, allocator: std.mem.Allocator) !bool {
         const event = try events.waitAndPop();
         const should_close = switch (event) {
             .quit, .window_close_requested => false,
             else => true,
         };
 
-        // TODO: flatten instance.root into a slice for the renderer
+        const width, _ = try instance.window.getSize(); //TODO not sure if correct size
+        const flattened = try layout.flatten(allocator, instance.root, @floatFromInt(width));
+        defer allocator.free(flattened);
+
+        //TODO pass flattened into render
         const elements = instance.root.data.block.children;
         try instance.renderer.render(instance.device, elements);
 
