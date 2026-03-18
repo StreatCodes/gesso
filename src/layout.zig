@@ -26,11 +26,14 @@ const Layout = struct {
             try layout.flatten(allocator, child, parent_width);
         }
 
-        //TODO handle elements that don't have an auto height.
-        //TODO we can probably set a scrollable if here if the children height is greater than explicit height
+        //TODO we can probably set a scrollable flag here if the children height is greater than explicit height
         // Calculate the height of this box now that we've flattened the children
-        const height = layout.cursor.y - starting_cursor.y;
+        const height = switch (element.height) {
+            .px => |px| @as(f32, @floatFromInt(px)),
+            .auto => layout.cursor.y - starting_cursor.y,
+        };
         layout.boxes.items[current_index].rect.h = height;
+        layout.cursor.y = starting_cursor.y + height;
     }
 };
 

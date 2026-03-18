@@ -5,8 +5,6 @@ pub const Color = sdl3.pixels.FColor;
 pub const Size = union(enum) {
     /// Fixed size in pixels
     px: u32,
-    /// Percentage of parent
-    percent: f32,
     /// Size to content
     auto,
 };
