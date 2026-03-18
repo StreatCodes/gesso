@@ -14,8 +14,12 @@ const Layout = struct {
 
     pub fn flatten(layout: *Layout, allocator: std.mem.Allocator, element: Element, parent_width: f32) !void {
         const starting_cursor = layout.cursor;
+        const width: f32 = switch (element.width) {
+            .px => |px| @as(f32, @floatFromInt(px)),
+            .auto => parent_width,
+        };
         const box = LayoutBox{
-            .rect = .{ .x = layout.cursor.x, .y = layout.cursor.y, .w = parent_width, .h = undefined },
+            .rect = .{ .x = layout.cursor.x, .y = layout.cursor.y, .w = width, .h = undefined },
             .background_color = element.background_color,
         };
 
@@ -23,7 +27,7 @@ const Layout = struct {
         const current_index = layout.boxes.items.len - 1;
 
         for (element.data.block.children) |child| {
-            try layout.flatten(allocator, child, parent_width);
+            try layout.flatten(allocator, child, width);
         }
 
         //TODO we can probably set a scrollable flag here if the children height is greater than explicit height
