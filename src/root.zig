@@ -16,8 +16,8 @@ pub fn init(title: [:0]const u8, screen_width: u32, screen_height: u32) !Instanc
     const root: Element = .{
         .background_color = .{ .r = 0.2, .g = 0.2, .b = 0.2, .a = 1.0 },
         .data = .{ .block = .{ .children = @constCast(&[_]Element{
-            .{ .background_color = .{ .r = 1.0, .g = 0.4, .b = 0.4, .a = 1.0 }, .height = .{ .px = 200 }, .data = .{ .block = .{ .children = &.{} } } },
-            .{ .background_color = .{ .r = 0.4, .g = 0.4, .b = 1.0, .a = 1.0 }, .height = .{ .px = 150 }, .data = .{ .block = .{ .children = &.{} } } },
+            .{ .background_color = .{ .r = 1.0, .g = 0.4, .b = 0.4, .a = 1.0 }, .width = .{ .px = 400 }, .height = .{ .px = 200 }, .data = .{ .block = .{ .children = &.{} } } },
+            .{ .background_color = .{ .r = 0.4, .g = 0.4, .b = 1.0, .a = 1.0 }, .width = .{ .px = 600 }, .height = .{ .px = 150 }, .data = .{ .block = .{ .children = &.{} } } },
         }) } },
     };
 
@@ -54,9 +54,7 @@ const Instance = struct {
         const flattened = try layout.flatten(allocator, instance.root, @floatFromInt(width));
         defer allocator.free(flattened);
 
-        //TODO pass flattened into render
-        const elements = instance.root.data.block.children;
-        try instance.renderer.render(instance.device, elements);
+        try instance.renderer.render(instance.device, flattened);
 
         return should_close;
     }

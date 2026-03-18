@@ -1,7 +1,7 @@
 const sdl3 = @import("sdl3");
 const gpu = sdl3.gpu;
 const std = @import("std");
-const Element = @import("Element.zig");
+const layout = @import("layout.zig");
 
 const msl_code = @embedFile("shaders/renderer.msl");
 const Renderer = @This();
@@ -80,13 +80,7 @@ pub fn deinit(renderer: *Renderer, device: gpu.Device) void {
     device.releaseWindow(renderer.window);
 }
 
-pub fn render(renderer: *Renderer, device: gpu.Device, elements: []const Element) !void {
-    // TODO: temporary rects until layout is wired in
-    const rects = [_]sdl3.rect.FRect{
-        .{ .x = 100, .y = 100, .w = 200, .h = 200 },
-        .{ .x = 400, .y = 100, .w = 200, .h = 200 },
-    };
-
+pub fn render(renderer: *Renderer, device: gpu.Device, boxes: []const layout.LayoutBox) !void {
     const command_buffer = try device.acquireCommandBuffer();
 
     const swapchain_texture, const width, const height = try command_buffer.waitAndAcquireSwapchainTexture(renderer.window);
@@ -95,14 +89,15 @@ pub fn render(renderer: *Renderer, device: gpu.Device, elements: []const Element
         return;
     }
 
-    const vertex_count = elements.len * 6;
+    const vertex_count = boxes.len * 6;
     const vertex_buf_size: u32 = @intCast(vertex_count * @sizeOf(Vertex));
 
     const transfer_buf = try device.createTransferBuffer(.{ .usage = .upload, .size = vertex_buf_size });
     defer device.releaseTransferBuffer(transfer_buf);
 
     const mapped: [*]Vertex = @ptrCast(@alignCast(try device.mapTransferBuffer(transfer_buf, false)));
-    for (rects, 0..) |rect, i| {
+    for (boxes, 0..) |box, i| {
+        const rect = box.rect;
         const base = i * 6;
         mapped[base + 0] = .{ .x = rect.x, .y = rect.y }; // TL
         mapped[base + 1] = .{ .x = rect.x + rect.w, .y = rect.y }; // TR
@@ -139,8 +134,8 @@ pub fn render(renderer: *Renderer, device: gpu.Device, elements: []const Element
     const screen_size = [2]u32{ width, height };
     command_buffer.pushVertexUniformData(0, std.mem.asBytes(&screen_size));
 
-    for (elements, 0..) |elem, i| {
-        const uniforms = FragmentUniforms{ .background_color = elem.background_color };
+    for (boxes, 0..) |box, i| {
+        const uniforms = FragmentUniforms{ .background_color = box.background_color };
         command_buffer.pushFragmentUniformData(0, std.mem.asBytes(&uniforms));
         render_pass.drawPrimitives(6, 1, @intCast(i * 6), 0);
     }

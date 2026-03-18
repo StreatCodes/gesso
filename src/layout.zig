@@ -3,7 +3,7 @@ const sdl3 = @import("sdl3");
 const styles = @import("styles.zig");
 const Element = @import("Element.zig");
 
-const LayoutBox = struct {
+pub const LayoutBox = struct {
     rect: sdl3.rect.FRect,
     background_color: styles.Color,
 };
