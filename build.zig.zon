@@ -2,11 +2,11 @@
     .name = .gesso,
     .version = "0.0.0",
     .fingerprint = 0x6e60db8433dc6362,
-    .minimum_zig_version = "0.15.2",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .sdl3 = .{
-            .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.1.9#45ffa097ad183a72f81d42f9f8c0df0398663814",
-            .hash = "sdl3-0.1.9-NmT1Q2k0JwAtPRns9E3OO6qpqpvy8mn80guJ8L209AtI",
+            .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.2.0#40c2e4b579aa556db37a502c936426aa1c8b5c95",
+            .hash = "sdl3-0.2.0-NmT1Q0mFJwBi9kZmArzh2rfJ_mFshydV0zPGULVlpACc",
         },
     },
     .paths = .{
