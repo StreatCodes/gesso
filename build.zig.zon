@@ -8,6 +8,10 @@
             .url = "git+https://codeberg.org/7Games/zig-sdl3?ref=v0.2.0#40c2e4b579aa556db37a502c936426aa1c8b5c95",
             .hash = "sdl3-0.2.0-NmT1Q0mFJwBi9kZmArzh2rfJ_mFshydV0zPGULVlpACc",
         },
+        .freetype = .{
+            .url = "git+https://github.com/StreatCodes/zig-freetype.git#29d368bf65f3a5ad96ce20f2736911e8e920a252",
+            .hash = "freetype-0.0.0-tyiC11UxAAAO4Bq6YptWxakiQR4voUF0e_nUA7AFSrxc",
+        },
     },
     .paths = .{
         "build.zig",

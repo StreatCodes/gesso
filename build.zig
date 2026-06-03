@@ -11,11 +11,17 @@ pub fn build(b: *std.Build) void {
         .ext_ttf = false,
     });
 
+    const freetype = b.dependency("freetype", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     const mod = b.addModule("gesso", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .imports = &.{
             .{ .name = "sdl3", .module = sdl3.module("sdl3") },
+            .{ .name = "freetype", .module = freetype.module("freetype") },
         },
     });
 

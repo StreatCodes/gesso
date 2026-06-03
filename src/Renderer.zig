@@ -9,6 +9,7 @@ const Renderer = @This();
 const Vertex = extern struct { x: f32, y: f32 };
 const FragmentUniforms = extern struct { background_color: sdl3.pixels.FColor };
 
+device: gpu.Device,
 window: sdl3.video.Window,
 graphics_pipeline: gpu.GraphicsPipeline,
 output_texture: gpu.Texture,
@@ -68,20 +69,21 @@ pub fn init(device: gpu.Device, window: sdl3.video.Window) !Renderer {
     });
 
     return .{
+        .device = device,
         .window = window,
         .output_texture = output_texture,
         .graphics_pipeline = graphics_pipeline,
     };
 }
 
-pub fn deinit(renderer: *Renderer, device: gpu.Device) void {
-    device.releaseTexture(renderer.output_texture);
-    device.releaseGraphicsPipeline(renderer.graphics_pipeline);
-    device.releaseWindow(renderer.window);
+pub fn deinit(renderer: *Renderer) void {
+    renderer.device.releaseTexture(renderer.output_texture);
+    renderer.device.releaseGraphicsPipeline(renderer.graphics_pipeline);
+    renderer.device.releaseWindow(renderer.window);
 }
 
-pub fn render(renderer: *Renderer, device: gpu.Device, boxes: []const layout.LayoutBox) !void {
-    const command_buffer = try device.acquireCommandBuffer();
+pub fn render(renderer: *Renderer, boxes: []const layout.LayoutBox) !void {
+    const command_buffer = try renderer.device.acquireCommandBuffer();
 
     const swapchain_texture, const width, const height = try command_buffer.waitAndAcquireSwapchainTexture(renderer.window);
     if (swapchain_texture == null) {
@@ -92,10 +94,10 @@ pub fn render(renderer: *Renderer, device: gpu.Device, boxes: []const layout.Lay
     const vertex_count = boxes.len * 6;
     const vertex_buf_size: u32 = @intCast(vertex_count * @sizeOf(Vertex));
 
-    const transfer_buf = try device.createTransferBuffer(.{ .usage = .upload, .size = vertex_buf_size });
-    defer device.releaseTransferBuffer(transfer_buf);
+    const transfer_buf = try renderer.device.createTransferBuffer(.{ .usage = .upload, .size = vertex_buf_size });
+    defer renderer.device.releaseTransferBuffer(transfer_buf);
 
-    const mapped: [*]Vertex = @ptrCast(@alignCast(try device.mapTransferBuffer(transfer_buf, false)));
+    const mapped: [*]Vertex = @ptrCast(@alignCast(try renderer.device.mapTransferBuffer(transfer_buf, false)));
     for (boxes, 0..) |box, i| {
         const rect = box.rect;
         const base = i * 6;
@@ -106,10 +108,10 @@ pub fn render(renderer: *Renderer, device: gpu.Device, boxes: []const layout.Lay
         mapped[base + 4] = .{ .x = rect.x + rect.w, .y = rect.y + rect.h }; // BR
         mapped[base + 5] = .{ .x = rect.x, .y = rect.y + rect.h }; // BL
     }
-    device.unmapTransferBuffer(transfer_buf);
+    renderer.device.unmapTransferBuffer(transfer_buf);
 
-    const vertex_buf = try device.createBuffer(.{ .usage = .{ .vertex = true }, .size = vertex_buf_size });
-    defer device.releaseBuffer(vertex_buf);
+    const vertex_buf = try renderer.device.createBuffer(.{ .usage = .{ .vertex = true }, .size = vertex_buf_size });
+    defer renderer.device.releaseBuffer(vertex_buf);
 
     const copy_pass = command_buffer.beginCopyPass();
     copy_pass.uploadToBuffer(
@@ -163,4 +165,39 @@ pub fn render(renderer: *Renderer, device: gpu.Device, boxes: []const layout.Lay
     });
 
     try command_buffer.submit();
+}
+
+pub fn uploadGlyph(renderer: *Renderer, bytes: []u8, width: u32, height: u32) !void {
+    const texture = try renderer.device.createTexture(.{
+        .format = .r8_unorm,
+        .width = width,
+        .height = height,
+        .usage = .{ .graphics_storage_read = true },
+    });
+
+    const transfer_buffer = try renderer.device.createTransferBuffer(.{
+        .size = bytes.len,
+        .usage = .upload,
+    });
+    defer renderer.device.releaseTransferBuffer(transfer_buffer);
+
+    const mapped_memory = try renderer.device.mapTransferBuffer(transfer_buffer, false);
+    @memcpy(mapped_memory, bytes);
+    renderer.device.unmapTransferBuffer(transfer_buffer);
+
+    var cmd_buffer = try renderer.device.acquireCommandBuffer();
+
+    const copy_pass = cmd_buffer.beginCopyPass();
+    copy_pass.uploadToTexture(.{
+        .offset = 0,
+        .transfer_buffer = transfer_buffer,
+    }, .{
+        .texture = texture,
+        .width = width,
+        .height = height,
+        .depth = 1,
+    }, false);
+    copy_pass.end();
+
+    cmd_buffer.submit();
 }
