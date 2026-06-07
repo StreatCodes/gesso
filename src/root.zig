@@ -6,14 +6,12 @@ const events = sdl3.events;
 const Renderer = @import("Renderer.zig");
 const Element = @import("Element.zig");
 const layout = @import("layout.zig");
-const freetype = @import("freetype");
 
-pub fn init(title: [:0]const u8, screen_width: u32, screen_height: u32) !Instance {
+pub fn init(allocator: std.mem.Allocator, title: [:0]const u8, screen_width: u32, screen_height: u32) !Instance {
     try sdl3.init(.{ .video = true });
     const window = try video.Window.init(title, screen_width, screen_height, .{});
     const device = try gpu.Device.init(.{ .msl = true }, false, null);
-    const renderer = try Renderer.init(device, window);
-    const freetype_lib = try freetype.init();
+    const renderer = try Renderer.init(allocator, device, window);
 
     const root: Element = .{
         .background_color = .{ .r = 0.2, .g = 0.2, .b = 0.2, .a = 1.0 },
@@ -28,7 +26,6 @@ pub fn init(title: [:0]const u8, screen_width: u32, screen_height: u32) !Instanc
         .device = device,
         .renderer = renderer,
         .root = root,
-        .freetype_lib = freetype_lib,
     };
 }
 
@@ -37,14 +34,12 @@ const Instance = struct {
     device: gpu.Device,
     renderer: Renderer,
     root: Element,
-    freetype_lib: freetype.Library,
 
     pub fn deinit(instance: *Instance) void {
         instance.renderer.deinit();
         instance.device.deinit();
         instance.window.deinit();
         sdl3.quit(.{ .video = true });
-        freetype.deinit(instance.freetype_lib);
     }
 
     /// Blocks until the next input event. Returns false when the app should close.
@@ -59,7 +54,7 @@ const Instance = struct {
         const flattened = try layout.flatten(allocator, instance.root, @floatFromInt(width));
         defer allocator.free(flattened);
 
-        try instance.renderer.render(flattened);
+        try instance.renderer.render(allocator, flattened);
 
         return should_close;
     }

@@ -2,6 +2,7 @@ const sdl3 = @import("sdl3");
 const gpu = sdl3.gpu;
 const std = @import("std");
 const layout = @import("layout.zig");
+const TextPipeline = @import("renderer/TextPipeline.zig");
 
 const msl_code = @embedFile("shaders/renderer.msl");
 const Renderer = @This();
@@ -12,23 +13,12 @@ const FragmentUniforms = extern struct { background_color: sdl3.pixels.FColor };
 device: gpu.Device,
 window: sdl3.video.Window,
 graphics_pipeline: gpu.GraphicsPipeline,
-output_texture: gpu.Texture,
+text_pipeline: TextPipeline,
 
-pub fn init(device: gpu.Device, window: sdl3.video.Window) !Renderer {
+pub fn init(allocator: std.mem.Allocator, device: gpu.Device, window: sdl3.video.Window) !Renderer {
     try device.claimWindow(window);
 
     const format = try device.getSwapchainTextureFormat(window);
-    const width, const height = try window.getSizeInPixels();
-
-    const output_texture = try device.createTexture(.{
-        .format = format,
-        .usage = .{ .color_target = true, .sampler = true },
-        .width = @intCast(width),
-        .height = @intCast(height),
-        .layer_count_or_depth = 1,
-        .num_levels = 1,
-    });
-
     const vertex_shader = try device.createShader(.{
         .code = msl_code,
         .entry_point = "vertex_main",
@@ -71,18 +61,20 @@ pub fn init(device: gpu.Device, window: sdl3.video.Window) !Renderer {
     return .{
         .device = device,
         .window = window,
-        .output_texture = output_texture,
         .graphics_pipeline = graphics_pipeline,
+        .text_pipeline = try TextPipeline.init(allocator, device),
     };
 }
 
 pub fn deinit(renderer: *Renderer) void {
-    renderer.device.releaseTexture(renderer.output_texture);
+    renderer.text_pipeline.deinit();
     renderer.device.releaseGraphicsPipeline(renderer.graphics_pipeline);
     renderer.device.releaseWindow(renderer.window);
 }
 
-pub fn render(renderer: *Renderer, boxes: []const layout.LayoutBox) !void {
+pub fn render(renderer: *Renderer, allocator: std.mem.Allocator, boxes: []const layout.LayoutBox) !void {
+    const texture = try renderer.text_pipeline.render(allocator, "Hello, world!", .{});
+    renderer.device.releaseTexture(texture);
     const command_buffer = try renderer.device.acquireCommandBuffer();
 
     const swapchain_texture, const width, const height = try command_buffer.waitAndAcquireSwapchainTexture(renderer.window);
@@ -123,7 +115,7 @@ pub fn render(renderer: *Renderer, boxes: []const layout.LayoutBox) !void {
 
     const render_pass = command_buffer.beginRenderPass(
         &[_]gpu.ColorTargetInfo{.{
-            .texture = renderer.output_texture,
+            .texture = swapchain_texture.?,
             .load = .clear,
             .clear_color = .{ .r = 0.2, .g = 0.2, .b = 0.2, .a = 1.0 },
             .store = .store,
@@ -144,60 +136,5 @@ pub fn render(renderer: *Renderer, boxes: []const layout.LayoutBox) !void {
 
     render_pass.end();
 
-    command_buffer.blitTexture(.{
-        .source = .{
-            .texture = renderer.output_texture,
-            .mip_level = 0,
-            .layer_or_depth_plane = 0,
-            .region = .{ .x = 0, .y = 0, .w = @intCast(width), .h = @intCast(height) },
-        },
-        .destination = .{
-            .texture = swapchain_texture.?,
-            .mip_level = 0,
-            .layer_or_depth_plane = 0,
-            .region = .{ .x = 0, .y = 0, .w = @intCast(width), .h = @intCast(height) },
-        },
-        .load_op = .do_not_care,
-        .clear_color = .{},
-        .flip_mode = .{},
-        .filter = .nearest,
-        .cycle = false,
-    });
-
     try command_buffer.submit();
-}
-
-pub fn uploadGlyph(renderer: *Renderer, bytes: []u8, width: u32, height: u32) !void {
-    const texture = try renderer.device.createTexture(.{
-        .format = .r8_unorm,
-        .width = width,
-        .height = height,
-        .usage = .{ .graphics_storage_read = true },
-    });
-
-    const transfer_buffer = try renderer.device.createTransferBuffer(.{
-        .size = bytes.len,
-        .usage = .upload,
-    });
-    defer renderer.device.releaseTransferBuffer(transfer_buffer);
-
-    const mapped_memory = try renderer.device.mapTransferBuffer(transfer_buffer, false);
-    @memcpy(mapped_memory, bytes);
-    renderer.device.unmapTransferBuffer(transfer_buffer);
-
-    var cmd_buffer = try renderer.device.acquireCommandBuffer();
-
-    const copy_pass = cmd_buffer.beginCopyPass();
-    copy_pass.uploadToTexture(.{
-        .offset = 0,
-        .transfer_buffer = transfer_buffer,
-    }, .{
-        .texture = texture,
-        .width = width,
-        .height = height,
-        .depth = 1,
-    }, false);
-    copy_pass.end();
-
-    cmd_buffer.submit();
 }

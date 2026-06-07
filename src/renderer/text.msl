@@ -1,0 +1,32 @@
+#include <metal_stdlib>
+using namespace metal;
+
+struct Node {
+    float4 background_color;
+};
+
+struct VertexIn {
+    float2 position [[attribute(0)]];
+};
+
+struct VertexOut {
+    float4 position [[position]];
+};
+
+vertex VertexOut vertex_main(
+    VertexIn in [[stage_in]],
+    constant uint2& screen_size [[buffer(0)]]
+) {
+    float2 clip_position = (in.position / float2(screen_size)) * 2.0 - 1.0;
+    clip_position.y = -clip_position.y;
+    VertexOut out;
+    out.position = float4(clip_position, 0.0, 1.0);
+    return out;
+}
+
+fragment float4 fragment_main(
+    VertexOut in [[stage_in]],
+    constant Node& node [[buffer(0)]]
+) {
+    return node.background_color;
+}
