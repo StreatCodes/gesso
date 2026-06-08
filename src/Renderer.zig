@@ -73,8 +73,8 @@ pub fn deinit(renderer: *Renderer) void {
 }
 
 pub fn render(renderer: *Renderer, allocator: std.mem.Allocator, boxes: []const layout.LayoutBox) !void {
-    const texture = try renderer.text_pipeline.render(allocator, "Hello, world!", .{});
-    renderer.device.releaseTexture(texture);
+    const text_result = try renderer.text_pipeline.render(allocator, "Hello,world!", .{});
+    defer renderer.device.releaseTexture(text_result.texture); //TODO we don't actually want to discard this, it's a cache
     const command_buffer = try renderer.device.acquireCommandBuffer();
 
     const swapchain_texture, const width, const height = try command_buffer.waitAndAcquireSwapchainTexture(renderer.window);
@@ -135,6 +135,27 @@ pub fn render(renderer: *Renderer, allocator: std.mem.Allocator, boxes: []const 
     }
 
     render_pass.end();
+
+    //TODO temporary blit here
+    command_buffer.blitTexture(.{
+        .source = .{
+            .texture = text_result.texture,
+            .mip_level = 0,
+            .layer_or_depth_plane = 0,
+            .region = .{ .x = 0, .y = 0, .w = text_result.width, .h = text_result.height },
+        },
+        .destination = .{
+            .texture = swapchain_texture.?,
+            .mip_level = 0,
+            .layer_or_depth_plane = 0,
+            .region = .{ .x = 0, .y = 0, .w = text_result.width, .h = text_result.height },
+        },
+        .load_op = .do_not_care,
+        .clear_color = .{},
+        .flip_mode = .{},
+        .filter = .nearest,
+        .cycle = false,
+    });
 
     try command_buffer.submit();
 }
