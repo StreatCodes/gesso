@@ -54,7 +54,7 @@ const Instance = struct {
         const flattened = try layout.flatten(allocator, instance.root, @floatFromInt(width));
         defer allocator.free(flattened);
 
-        try instance.renderer.render(allocator, flattened);
+        try instance.renderer.render(flattened);
 
         return should_close;
     }

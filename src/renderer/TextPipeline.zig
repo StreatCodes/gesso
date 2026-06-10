@@ -95,42 +95,17 @@ const TextureResult = struct {
 
 /// Renders the given text to a texture on the GPUs, It's the callers responsibility to free
 /// the texture.
-pub fn render(pipeline: *TextPipeline, allocator: std.mem.Allocator, text: []const u8, options: RenderOptions) !TextureResult {
+pub fn render(pipeline: *TextPipeline, text: []const u8, options: RenderOptions) !TextureResult {
     _ = options;
-    const glyph_list = try pipeline.generateGlyphList(allocator, text);
-    defer allocator.free(glyph_list);
 
-    //////////////////// TODO vertex count is wrong! Some glyphs don't have textures, so they should not be drawn at all!
-    const vertex_count = glyph_list.len * 4;
-    const vertex_buf_size: u32 = @intCast(vertex_count * @sizeOf(Vertex));
+    const transfer_info = try pipeline.fillTransferBuffer(text);
+    defer pipeline.device.releaseTransferBuffer(transfer_info.buffer);
 
-    const transfer_buf = try pipeline.device.createTransferBuffer(.{ .usage = .upload, .size = vertex_buf_size });
-    defer pipeline.device.releaseTransferBuffer(transfer_buf);
-
-    var cursor: f32 = 0.0;
-    const mapped: [*]Vertex = @ptrCast(@alignCast(try pipeline.device.mapTransferBuffer(transfer_buf, false)));
-    for (glyph_list, 0..) |glyph_info, i| {
-        const base = i * 4;
-        const baseline = 26.0;
-        const width: f32 = @floatFromInt(glyph_info.width);
-        const height: f32 = @floatFromInt(glyph_info.height);
-        const x = cursor + @as(f32, @floatFromInt(glyph_info.offset_left));
-        const y = baseline - @as(f32, @floatFromInt(glyph_info.offset_top));
-
-        mapped[base + 0] = .{ .x = x, .y = y, .uv_x = 0.0, .uv_y = 0.0 }; // TL
-        mapped[base + 1] = .{ .x = x + width, .y = y, .uv_x = 1.0, .uv_y = 0.0 }; // TR
-        mapped[base + 2] = .{ .x = x, .y = y + height, .uv_x = 0.0, .uv_y = 1.0 }; // BL
-        mapped[base + 3] = .{ .x = x + width, .y = y + height, .uv_x = 1.0, .uv_y = 1.0 }; // BR
-
-        cursor += @floatFromInt(glyph_info.advance);
-    }
-    pipeline.device.unmapTransferBuffer(transfer_buf);
-
-    const vertex_buf = try pipeline.device.createBuffer(.{ .usage = .{ .vertex = true }, .size = vertex_buf_size });
+    const vertex_buf = try pipeline.device.createBuffer(.{ .usage = .{ .vertex = true }, .size = transfer_info.size });
     defer pipeline.device.releaseBuffer(vertex_buf);
 
-    const output_height: u32 = 40; //TODO this needs to be calculated in the above iterator
-    const output_width: u32 = @intFromFloat(cursor);
+    const output_height = transfer_info.texture_height;
+    const output_width = transfer_info.texture_width;
     const output_texture = try pipeline.device.createTexture(.{
         .format = .r8g8b8a8_unorm,
         .usage = .{ .color_target = true, .sampler = true },
@@ -143,8 +118,8 @@ pub fn render(pipeline: *TextPipeline, allocator: std.mem.Allocator, text: []con
     const command_buffer = try pipeline.device.acquireCommandBuffer();
     const copy_pass = command_buffer.beginCopyPass();
     copy_pass.uploadToBuffer(
-        .{ .transfer_buffer = transfer_buf, .offset = 0 },
-        .{ .buffer = vertex_buf, .offset = 0, .size = vertex_buf_size },
+        .{ .transfer_buffer = transfer_info.buffer, .offset = 0 },
+        .{ .buffer = vertex_buf, .offset = 0, .size = transfer_info.size },
         false,
     );
     copy_pass.end();
@@ -163,20 +138,20 @@ pub fn render(pipeline: *TextPipeline, allocator: std.mem.Allocator, text: []con
     const texture_size = [2]u32{ output_width, output_height };
     command_buffer.pushVertexUniformData(0, std.mem.asBytes(&texture_size));
 
-    for (glyph_list, 0..) |glyph_info, _i| {
-        const texture = glyph_info.texture orelse continue;
+    var i: u32 = 0;
+    var iter = std.unicode.Utf8Iterator{ .bytes = text, .i = 0 };
+    while (iter.nextCodepoint()) |codepoint| {
+        const glyph = try pipeline.glyph_atlas.get(pipeline.device, codepoint);
+        const texture = glyph.texture orelse continue;
 
-        const i: u32 = @intCast(_i);
         render_pass.bindVertexBuffers(0, &[_]gpu.BufferBinding{.{ .buffer = vertex_buf, .offset = i * 4 * @sizeOf(Vertex) }});
         render_pass.bindFragmentSamplers(0, &[_]gpu.TextureSamplerBinding{.{
             .texture = texture,
             .sampler = pipeline.sampler,
         }});
 
-        // const uniforms = FragmentUniforms{ .background_color = box.background_color };
-        // command_buffer.pushFragmentUniformData(0, std.mem.asBytes(&uniforms));
-
         render_pass.drawPrimitives(4, 1, 0, 0);
+        i += 1;
     }
 
     render_pass.end();
@@ -189,19 +164,59 @@ pub fn render(pipeline: *TextPipeline, allocator: std.mem.Allocator, text: []con
     };
 }
 
-/// This function will ensure everything required to render the given utf-8 string is created.
-/// Returning all the information required to render the string on the GPU. It is the caller's
-/// responsibility to free the returned slice.
-fn generateGlyphList(pipeline: *TextPipeline, allocator: std.mem.Allocator, text: []const u8) ![]GlyphInfo {
-    const string_len = try std.unicode.utf8CountCodepoints(text);
-    const string_info = try allocator.alloc(GlyphInfo, string_len);
+const TransferBufferInfo = struct {
+    size: u32,
+    buffer: gpu.TransferBuffer,
+    texture_width: u32, // TODO this doesn't really make sense to be in this struct
+    texture_height: u32,
+};
 
+/// Creates a fills a new transfer buffer with the vertex information so it can be submitted
+/// to a vertex buffer. It's the caller's responsibility to release the returned transfer buffer.
+fn fillTransferBuffer(pipeline: *TextPipeline, text: []const u8) !TransferBufferInfo {
+    //Count the number of glyphs that are rendered (not blank spaces)
+    var glyph_count: u32 = 0;
     var iter = std.unicode.Utf8Iterator{ .bytes = text, .i = 0 };
-    var i: usize = 0;
-    while (iter.nextCodepoint()) |codepoint| : (i += 1) {
+    while (iter.nextCodepoint()) |codepoint| {
         const glyph = try pipeline.glyph_atlas.get(pipeline.device, codepoint);
-        string_info[i] = glyph;
+        if (glyph.texture != null) glyph_count += 1;
     }
 
-    return string_info;
+    //Create the transfer buffer and fill it with the vertex information
+    const buffer_size: u32 = @intCast(glyph_count * 4 * @sizeOf(Vertex));
+    const buffer = try pipeline.device.createTransferBuffer(.{ .usage = .upload, .size = buffer_size });
+
+    var i: usize = 0;
+    iter.i = 0;
+    var cursor: f32 = 0.0;
+    var max_height: u32 = 0;
+    const mapped: [*]Vertex = @ptrCast(@alignCast(try pipeline.device.mapTransferBuffer(buffer, false)));
+    while (iter.nextCodepoint()) |codepoint| {
+        const glyph = try pipeline.glyph_atlas.get(pipeline.device, codepoint);
+        if (glyph.texture == null) continue;
+
+        const base = i * 4;
+        const baseline = 26.0;
+        const width: f32 = @floatFromInt(glyph.width);
+        const height: f32 = @floatFromInt(glyph.height);
+        const x = cursor + @as(f32, @floatFromInt(glyph.offset_left));
+        const y = baseline - @as(f32, @floatFromInt(glyph.offset_top));
+
+        mapped[base + 0] = .{ .x = x, .y = y, .uv_x = 0.0, .uv_y = 0.0 }; // TL
+        mapped[base + 1] = .{ .x = x + width, .y = y, .uv_x = 1.0, .uv_y = 0.0 }; // TR
+        mapped[base + 2] = .{ .x = x, .y = y + height, .uv_x = 0.0, .uv_y = 1.0 }; // BL
+        mapped[base + 3] = .{ .x = x + width, .y = y + height, .uv_x = 1.0, .uv_y = 1.0 }; // BR
+
+        max_height = @max(max_height, glyph.height);
+        cursor += @floatFromInt(glyph.advance);
+        i += 1;
+    }
+    pipeline.device.unmapTransferBuffer(buffer);
+
+    return .{
+        .buffer = buffer,
+        .size = buffer_size,
+        .texture_width = @intFromFloat(cursor),
+        .texture_height = max_height,
+    };
 }
