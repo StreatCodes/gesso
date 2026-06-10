@@ -8,8 +8,11 @@ const TextPipeline = @This();
 
 const GlyphInfo = struct {
     texture: ?gpu.Texture = null,
-    width: u32,
-    height: u32,
+    width: u32 = 0,
+    height: u32 = 0,
+    advance: u32,
+    offset_top: i32,
+    offset_left: i32,
 };
 
 const GlyphAtlas = std.AutoHashMap(u21, GlyphInfo);
@@ -125,6 +128,7 @@ pub fn render(pipeline: *TextPipeline, allocator: std.mem.Allocator, text: []con
     const glyph_list = try pipeline.generateGlyphList(allocator, text);
     defer allocator.free(glyph_list);
 
+    //////////////////// TODO vertex count is wrong! Some glyphs don't have textures, so they should not be drawn at all!
     const vertex_count = glyph_list.len * 4;
     const vertex_buf_size: u32 = @intCast(vertex_count * @sizeOf(Vertex));
 
@@ -134,16 +138,19 @@ pub fn render(pipeline: *TextPipeline, allocator: std.mem.Allocator, text: []con
     var cursor: f32 = 0.0;
     const mapped: [*]Vertex = @ptrCast(@alignCast(try pipeline.device.mapTransferBuffer(transfer_buf, false)));
     for (glyph_list, 0..) |glyph_info, i| {
+        const base = i * 4;
+        const baseline = 26.0;
         const width: f32 = @floatFromInt(glyph_info.width);
         const height: f32 = @floatFromInt(glyph_info.height);
-        const base = i * 4;
+        const x = cursor + @as(f32, @floatFromInt(glyph_info.offset_left));
+        const y = baseline - @as(f32, @floatFromInt(glyph_info.offset_top));
 
-        mapped[base + 0] = .{ .x = cursor, .y = 0, .uv_x = 0.0, .uv_y = 0.0 }; // TL
-        mapped[base + 1] = .{ .x = cursor + width, .y = 0, .uv_x = 1.0, .uv_y = 0.0 }; // TR
-        mapped[base + 2] = .{ .x = cursor, .y = height, .uv_x = 0.0, .uv_y = 1.0 }; // BL
-        mapped[base + 3] = .{ .x = cursor + width, .y = height, .uv_x = 1.0, .uv_y = 1.0 }; // BR
+        mapped[base + 0] = .{ .x = x, .y = y, .uv_x = 0.0, .uv_y = 0.0 }; // TL
+        mapped[base + 1] = .{ .x = x + width, .y = y, .uv_x = 1.0, .uv_y = 0.0 }; // TR
+        mapped[base + 2] = .{ .x = x, .y = y + height, .uv_x = 0.0, .uv_y = 1.0 }; // BL
+        mapped[base + 3] = .{ .x = x + width, .y = y + height, .uv_x = 1.0, .uv_y = 1.0 }; // BR
 
-        cursor += width;
+        cursor += @floatFromInt(glyph_info.advance);
     }
     pipeline.device.unmapTransferBuffer(transfer_buf);
 
@@ -230,18 +237,21 @@ fn generateGlyphList(pipeline: *TextPipeline, allocator: std.mem.Allocator, text
         const glyph = try pipeline.font_face.load_glyph(glyph_index, .{});
         const bitmap = try pipeline.font_face.render_glyph(.normal);
 
-        // TODO need to handle scenario where there is no glyph for the given code point
+        var glyph_info = GlyphInfo{
+            .advance = @intCast(@divTrunc(glyph.advance.x, 64)),
+            .offset_top = glyph.bitmap_top,
+            .offset_left = glyph.bitmap_left,
+        };
+
         if (bitmap) |data| {
             std.debug.print("'{u}' not found, creating texture\n", .{codepoint});
             const width: u32 = @abs(glyph.bitmap.pitch);
             const height: u32 = glyph.bitmap.rows;
 
             const new_texture = try pipeline.uploadGlyph(data, width, height);
-            const glyph_info = GlyphInfo{
-                .width = width,
-                .height = height,
-                .texture = new_texture,
-            };
+            glyph_info.width = width;
+            glyph_info.height = height;
+            glyph_info.texture = new_texture;
 
             string_info[i] = glyph_info;
             try pipeline.glyph_atlas.put(codepoint, glyph_info);
