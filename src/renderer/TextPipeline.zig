@@ -1,39 +1,22 @@
 const sdl3 = @import("sdl3");
 const gpu = sdl3.gpu;
 const std = @import("std");
-const freetype = @import("freetype");
+const GlyphAtlas = @import("GlyphAtlas.zig");
+const GlyphInfo = GlyphAtlas.Glyph;
 
 const msl_code = @embedFile("./text.msl");
 const TextPipeline = @This();
 
-const GlyphInfo = struct {
-    texture: ?gpu.Texture = null,
-    width: u32 = 0,
-    height: u32 = 0,
-    advance: u32,
-    offset_top: i32,
-    offset_left: i32,
-};
-
-const GlyphAtlas = std.AutoHashMap(u21, GlyphInfo);
-
 const Vertex = extern struct { x: f32, y: f32, uv_x: f32, uv_y: f32 };
 const FragmentUniforms = extern struct { background_color: sdl3.pixels.FColor };
 
-freetype_lib: freetype.Library,
 device: gpu.Device,
 graphics_pipeline: gpu.GraphicsPipeline,
 sampler: gpu.Sampler,
 // TODO we need to support multiple font sizes, weights, etc. in future.
 glyph_atlas: GlyphAtlas,
-//TODO support more than one hard coded face and font
-font_face: freetype.Face,
 
 pub fn init(allocator: std.mem.Allocator, device: gpu.Device) !TextPipeline {
-    const freetype_lib = try freetype.init();
-    const face = try freetype.Face.init(freetype_lib, "src/fonts/NotoSans-Regular.ttf", 0);
-    try face.set_pixel_sizes(0, 32);
-
     const vertex_shader = try device.createShader(.{
         .code = msl_code,
         .entry_point = "vertex_main",
@@ -87,28 +70,17 @@ pub fn init(allocator: std.mem.Allocator, device: gpu.Device) !TextPipeline {
     });
 
     return .{
-        .freetype_lib = freetype_lib,
         .device = device,
         .sampler = sampler,
         .graphics_pipeline = graphics_pipeline,
-        .glyph_atlas = .init(allocator),
-        .font_face = face,
+        .glyph_atlas = try .init(allocator),
     };
 }
 
 pub fn deinit(pipeline: *TextPipeline) void {
-    var glyph_iter = pipeline.glyph_atlas.iterator();
-    while (glyph_iter.next()) |entry| {
-        if (entry.value_ptr.texture) |texture| {
-            pipeline.device.releaseTexture(texture);
-        }
-    }
-
-    pipeline.glyph_atlas.deinit();
+    pipeline.glyph_atlas.deinit(pipeline.device);
     pipeline.device.releaseSampler(pipeline.sampler);
     pipeline.device.releaseGraphicsPipeline(pipeline.graphics_pipeline);
-    pipeline.font_face.deinit();
-    freetype.deinit(pipeline.freetype_lib);
 }
 
 const RenderOptions = struct {
@@ -227,77 +199,9 @@ fn generateGlyphList(pipeline: *TextPipeline, allocator: std.mem.Allocator, text
     var iter = std.unicode.Utf8Iterator{ .bytes = text, .i = 0 };
     var i: usize = 0;
     while (iter.nextCodepoint()) |codepoint| : (i += 1) {
-        const texture = pipeline.glyph_atlas.get(codepoint);
-        if (texture) |glyph_info| {
-            string_info[i] = glyph_info;
-            continue;
-        }
-
-        const glyph_index = pipeline.font_face.get_char_index(@intCast(codepoint));
-        const glyph = try pipeline.font_face.load_glyph(glyph_index, .{});
-        const bitmap = try pipeline.font_face.render_glyph(.normal);
-
-        var glyph_info = GlyphInfo{
-            .advance = @intCast(@divTrunc(glyph.advance.x, 64)),
-            .offset_top = glyph.bitmap_top,
-            .offset_left = glyph.bitmap_left,
-        };
-
-        if (bitmap) |data| {
-            std.debug.print("'{u}' not found, creating texture\n", .{codepoint});
-            const width: u32 = @abs(glyph.bitmap.pitch);
-            const height: u32 = glyph.bitmap.rows;
-
-            const new_texture = try pipeline.uploadGlyph(data, width, height);
-            glyph_info.width = width;
-            glyph_info.height = height;
-            glyph_info.texture = new_texture;
-
-            string_info[i] = glyph_info;
-            try pipeline.glyph_atlas.put(codepoint, glyph_info);
-        } else {
-            std.debug.print("'{u}' not found, no glyph for codepoint\n", .{codepoint});
-        }
+        const glyph = try pipeline.glyph_atlas.get(pipeline.device, codepoint);
+        string_info[i] = glyph;
     }
 
     return string_info;
-}
-
-pub fn uploadGlyph(pipeline: *TextPipeline, bytes: []u8, width: u32, height: u32) !gpu.Texture {
-    const texture = try pipeline.device.createTexture(.{
-        .format = .r8_unorm,
-        .width = width,
-        .height = height,
-        .usage = .{ .sampler = true }, //TODO is this correct?
-        .num_levels = 1,
-        .layer_count_or_depth = 1,
-    });
-
-    const transfer_buffer = try pipeline.device.createTransferBuffer(.{
-        .size = @intCast(bytes.len),
-        .usage = .upload,
-    });
-    defer pipeline.device.releaseTransferBuffer(transfer_buffer);
-
-    const mapped_memory = try pipeline.device.mapTransferBuffer(transfer_buffer, false);
-    @memcpy(mapped_memory, bytes);
-    pipeline.device.unmapTransferBuffer(transfer_buffer);
-
-    var cmd_buffer = try pipeline.device.acquireCommandBuffer();
-
-    const copy_pass = cmd_buffer.beginCopyPass();
-    copy_pass.uploadToTexture(.{
-        .offset = 0,
-        .transfer_buffer = transfer_buffer,
-    }, .{
-        .texture = texture,
-        .width = width,
-        .height = height,
-        .depth = 1,
-    }, false);
-
-    copy_pass.end();
-    try cmd_buffer.submit();
-
-    return texture;
 }
