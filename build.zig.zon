@@ -9,8 +9,8 @@
             .hash = "sdl3-0.2.0-NmT1Q0mFJwBi9kZmArzh2rfJ_mFshydV0zPGULVlpACc",
         },
         .freetype = .{
-            .url = "git+https://github.com/StreatCodes/zig-freetype.git#29d368bf65f3a5ad96ce20f2736911e8e920a252",
-            .hash = "freetype-0.0.0-tyiC11UxAAAO4Bq6YptWxakiQR4voUF0e_nUA7AFSrxc",
+            .url = "git+https://github.com/StreatCodes/zig-freetype.git#998306a0490cc78231c0984f88f7c56a5825d6c3",
+            .hash = "freetype-0.0.0-tyiC1zYyAAA26e8aOYoWpqnkyrPvqXm4C0x29IumnAIy",
         },
     },
     .paths = .{

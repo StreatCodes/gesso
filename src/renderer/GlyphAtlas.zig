@@ -21,7 +21,7 @@ pub fn init(allocator: std.mem.Allocator) !GlyphAtlas {
     const freetype_lib = try freetype.init();
     //TODO support more than one hard coded face and font
     const face = try freetype.Face.init(freetype_lib, "src/fonts/NotoSans-Regular.ttf", 0);
-    try face.set_pixel_sizes(0, 32);
+    try face.setPixelSizes(0, 32);
 
     return .{
         .freetype_lib = freetype_lib,
@@ -48,9 +48,9 @@ pub fn get(atlas: *GlyphAtlas, device: sdl3.gpu.Device, codepoint: u21) !Glyph {
         return glyph;
     }
 
-    const glyph_index = atlas.font_face.get_char_index(@intCast(codepoint));
-    const glyph = try atlas.font_face.load_glyph(glyph_index, .{});
-    const bitmap = try atlas.font_face.render_glyph(.normal);
+    const glyph_index = atlas.font_face.getCharIndex(@intCast(codepoint));
+    const glyph = try atlas.font_face.loadGlyph(glyph_index, .{});
+    const bitmap = try atlas.font_face.renderGlyph(.normal);
 
     var glyph_info = Glyph{
         .advance = @intCast(@divTrunc(glyph.advance.x, 64)),
@@ -69,8 +69,6 @@ pub fn get(atlas: *GlyphAtlas, device: sdl3.gpu.Device, codepoint: u21) !Glyph {
         glyph_info.texture = new_texture;
 
         try atlas.cache.put(codepoint, glyph_info);
-    } else {
-        std.debug.print("'{u}' not found, no glyph for codepoint\n", .{codepoint});
     }
 
     return glyph_info;

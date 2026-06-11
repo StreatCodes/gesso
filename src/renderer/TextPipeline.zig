@@ -186,17 +186,24 @@ fn fillTransferBuffer(pipeline: *TextPipeline, text: []const u8) !TransferBuffer
     const buffer_size: u32 = @intCast(glyph_count * 4 * @sizeOf(Vertex));
     const buffer = try pipeline.device.createTransferBuffer(.{ .usage = .upload, .size = buffer_size });
 
+    const ascender = @divTrunc(pipeline.glyph_atlas.font_face.handle.*.size.*.metrics.ascender, 64);
+    const descender = -@divTrunc(pipeline.glyph_atlas.font_face.handle.*.size.*.metrics.descender, 64);
+    const baseline: f32 = @floatFromInt(ascender);
+    const max_height: u32 = @intCast(ascender + descender);
+
     var i: usize = 0;
     iter.i = 0;
     var cursor: f32 = 0.0;
-    var max_height: u32 = 0;
     const mapped: [*]Vertex = @ptrCast(@alignCast(try pipeline.device.mapTransferBuffer(buffer, false)));
     while (iter.nextCodepoint()) |codepoint| {
         const glyph = try pipeline.glyph_atlas.get(pipeline.device, codepoint);
-        if (glyph.texture == null) continue;
+        if (glyph.texture == null) {
+            cursor += @floatFromInt(glyph.advance);
+            continue;
+        }
 
         const base = i * 4;
-        const baseline = 26.0;
+
         const width: f32 = @floatFromInt(glyph.width);
         const height: f32 = @floatFromInt(glyph.height);
         const x = cursor + @as(f32, @floatFromInt(glyph.offset_left));
@@ -207,7 +214,6 @@ fn fillTransferBuffer(pipeline: *TextPipeline, text: []const u8) !TransferBuffer
         mapped[base + 2] = .{ .x = x, .y = y + height, .uv_x = 0.0, .uv_y = 1.0 }; // BL
         mapped[base + 3] = .{ .x = x + width, .y = y + height, .uv_x = 1.0, .uv_y = 1.0 }; // BR
 
-        max_height = @max(max_height, glyph.height);
         cursor += @floatFromInt(glyph.advance);
         i += 1;
     }

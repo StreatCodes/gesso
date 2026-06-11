@@ -73,7 +73,7 @@ pub fn deinit(renderer: *Renderer) void {
 }
 
 pub fn render(renderer: *Renderer, boxes: []const layout.LayoutBox) !void {
-    const text_result = try renderer.text_pipeline.render("Hello,world!", .{});
+    const text_result = try renderer.text_pipeline.render("Hello, world!", .{});
     defer renderer.device.releaseTexture(text_result.texture); //TODO we don't actually want to discard this, it's a cache
     const command_buffer = try renderer.device.acquireCommandBuffer();
 
