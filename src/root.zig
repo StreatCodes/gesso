@@ -8,18 +8,17 @@ const text = @import("renderer/text.zig");
 const GlyphAtlas = @import("renderer/GlyphAtlas.zig");
 const parser = @import("parser.zig");
 
-pub fn init(allocator: std.mem.Allocator, title: [:0]const u8, screen_width: u32, screen_height: u32, document: []const u8) !Instance {
+pub fn init(allocator: std.mem.Allocator, title: [:0]const u8, screen_width: u32, screen_height: u32, document_text: []const u8) !Instance {
     try sdl3.init(.{ .video = true });
     const window = try video.Window.init(title, screen_width, screen_height, .{});
     const renderer = try sdl3.render.Renderer.init(window, null);
-    const doc = try parser.parse(allocator, document);
-    //TODO use the doc....
-    defer doc.deinit();
+    const document = try parser.parse(allocator, document_text);
+    defer document.deinit();
 
     return .{
         .window = window,
         .renderer = renderer,
-        // .root = try parser.parse(allocator, document),
+        .tree = try tree.fromDocument(allocator, document),
         .glyph_atlas = try GlyphAtlas.init(allocator),
     };
 }
@@ -27,10 +26,11 @@ pub fn init(allocator: std.mem.Allocator, title: [:0]const u8, screen_width: u32
 const Instance = struct {
     window: video.Window,
     renderer: sdl3.render.Renderer,
-    // root: elements.Block,
+    tree: tree.Tree,
     glyph_atlas: GlyphAtlas,
 
     pub fn deinit(instance: *Instance) void {
+        instance.tree.deinit();
         instance.glyph_atlas.deinit();
         instance.renderer.deinit();
         instance.window.deinit();

@@ -9,13 +9,13 @@ const ParserError = error{
 };
 
 const Attributes = std.StringHashMap([]const u8);
-const Tag = struct {
+pub const Tag = struct {
     name: []const u8,
     children: []Element,
     attributes: Attributes,
 };
 
-const Text = []const u8;
+pub const Text = []const u8;
 
 pub const Element = union(enum) {
     tag: Tag,
@@ -139,9 +139,9 @@ fn isWhitespace(char: u8) bool {
     return char == ' ' or char == '\n' or char == '\t';
 }
 
-/// Matches Element or Attribute names which can only include lowercase letters and dashes
+/// Matches Element or Attribute names which can only include lowercase letters and underscores
 fn isName(char: u8) bool {
-    if (char == '-') return true;
+    if (char == '_') return true;
     return char >= 'a' and char <= 'z';
 }
 
@@ -183,13 +183,13 @@ test "can parse self closing elements with attributes" {
     try std.testing.expectEqualStrings("placeholder text", document.children[0].tag.attributes.get("placeholder").?);
 }
 
-test "allow dashes in element and attribute names" {
-    const text = "<an-element multi-word-attribute=\"attribute value!\" />";
+test "allow underscore in element and attribute names" {
+    const text = "<an_element multi_word_attribute=\"attribute value!\" />";
     const document = try parse(std.testing.allocator, text);
     defer document.deinit();
 
-    try std.testing.expectEqualStrings("an-element", document.children[0].tag.name);
-    try std.testing.expectEqualStrings("attribute value!", document.children[0].tag.attributes.get("multi-word-attribute").?);
+    try std.testing.expectEqualStrings("an_element", document.children[0].tag.name);
+    try std.testing.expectEqualStrings("attribute value!", document.children[0].tag.attributes.get("multi_word_attribute").?);
 }
 
 test "can parse nested elements" {
