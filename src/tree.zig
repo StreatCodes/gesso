@@ -34,8 +34,7 @@ pub fn fromDocument(allocator: std.mem.Allocator, document: parser.Document) !Tr
     return tree;
 }
 
-const NError = std.mem.Allocator.Error || Error;
-pub fn elementToNode(allocator: std.mem.Allocator, element: parser.Element) NError!Node {
+pub fn elementToNode(allocator: std.mem.Allocator, element: parser.Element) anyerror!Node {
     switch (element) {
         .tag => |tag| {
             return try Node.fromTag(allocator, tag);
@@ -65,10 +64,23 @@ pub const Node = union(enum) {
 
 pub const Common = struct {
     id: ?u32 = null,
-    background_color: styles.Color = .{ .r = 0.2, .g = 0.2, .b = 0.2, .a = 1.0 },
+    background_color: styles.Color = .{ .handle = .{ .r = 0, .g = 0, .b = 0, .a = 255 } },
     margin: styles.Margin = .{},
     width: styles.Size = .auto,
     height: styles.Size = .auto,
+
+    pub fn fromAttributes(attributes: parser.Attributes) !Common {
+        var common = Common{};
+
+        if (attributes.get("id")) |id| {
+            common.id = try std.fmt.parseInt(u32, id, 10);
+        }
+        if (attributes.get("background_color")) |bg| {
+            common.background_color = try .fromString(bg);
+        }
+
+        return common;
+    }
 };
 
 test "a tree is generated for the most basic empty block element" {

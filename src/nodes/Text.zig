@@ -26,7 +26,7 @@ pub fn fromTag(allocator: std.mem.Allocator, tag: parser.Tag) !Text {
     }
 
     return .{
-        .common = .{}, // TODO from attributes
+        .common = try .fromAttributes(tag.attributes),
         .parts = parts,
     };
 }

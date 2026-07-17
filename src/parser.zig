@@ -9,7 +9,7 @@ const Error = error{
     NameRequired,
 };
 
-const Attributes = std.StringHashMap([]const u8);
+pub const Attributes = std.StringHashMap([]const u8);
 pub const Tag = struct {
     name: []const u8,
     children: []Element,

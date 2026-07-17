@@ -1,6 +1,24 @@
+const std = @import("std");
 const sdl3 = @import("sdl3");
 
-pub const Color = sdl3.pixels.FColor;
+pub const Error = error{InvalidColor};
+
+pub const Color = struct {
+    handle: sdl3.pixels.Color,
+
+    pub fn fromString(str: []const u8) !Color {
+        if (str.len != 9 or str[0] != '#') return Error.InvalidColor;
+
+        return .{
+            .handle = .{
+                .r = try std.fmt.parseInt(u8, str[1..2], 16),
+                .g = try std.fmt.parseInt(u8, str[1..2], 16),
+                .b = try std.fmt.parseInt(u8, str[1..2], 16),
+                .a = 255, //TODO we could get this value
+            },
+        };
+    }
+};
 
 pub const Size = union(enum) {
     /// Fixed size in pixels

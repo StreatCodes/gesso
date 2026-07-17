@@ -4,6 +4,7 @@ const parser = @import("../parser.zig");
 
 const Block = @This();
 
+common: tree.Common = .{},
 children: std.ArrayList(tree.Node) = .empty,
 
 pub fn fromTag(allocator: std.mem.Allocator, tag: parser.Tag) !Block {
@@ -12,6 +13,8 @@ pub fn fromTag(allocator: std.mem.Allocator, tag: parser.Tag) !Block {
         const node = try tree.elementToNode(allocator, element);
         try block.children.append(allocator, node);
     }
+
+    block.common = try .fromAttributes(tag.attributes);
 
     return block;
 }
