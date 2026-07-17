@@ -11,13 +11,13 @@ pub const Color = struct {
     handle: sdl3.pixels.Color,
 
     pub fn fromString(str: []const u8) !Color {
-        if (str.len != 9 or str[0] != '#') return Error.InvalidColor;
+        if (str.len != 7 or str[0] != '#') return Error.InvalidColor;
 
         return .{
             .handle = .{
-                .r = try std.fmt.parseInt(u8, str[1..2], 16),
-                .g = try std.fmt.parseInt(u8, str[1..2], 16),
-                .b = try std.fmt.parseInt(u8, str[1..2], 16),
+                .r = try std.fmt.parseInt(u8, str[1..3], 16),
+                .g = try std.fmt.parseInt(u8, str[3..5], 16),
+                .b = try std.fmt.parseInt(u8, str[5..7], 16),
                 .a = 255, //TODO we could get this value
             },
         };

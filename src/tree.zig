@@ -157,3 +157,25 @@ test "a text node with formatting is correctly applied" {
     try std.testing.expectEqualStrings("dog!", parts[6].content);
     try std.testing.expectEqual(Text.Format{}, parts[6].format);
 }
+
+test "element attributes popular the common Node data" {
+    const document = try parser.parse(std.testing.allocator, "<block id=\"100\" width=\"auto\" height=\"200px\" margin=\"300px auto\" background_color=\"#02140C\" />");
+    defer document.deinit();
+    const tree = try fromDocument(std.testing.allocator, document);
+    defer tree.deinit();
+
+    const block = tree.root.children.items[0].block;
+    try std.testing.expectEqual(100, block.common.id);
+    try std.testing.expectEqual(.auto, block.common.width);
+    try std.testing.expectEqual(200, block.common.height.px);
+
+    try std.testing.expectEqual(300, block.common.margin.top.px);
+    try std.testing.expectEqual(300, block.common.margin.bottom.px);
+    try std.testing.expectEqual(.auto, block.common.margin.left);
+    try std.testing.expectEqual(.auto, block.common.margin.right);
+
+    try std.testing.expectEqual(2, block.common.background_color.handle.r);
+    try std.testing.expectEqual(20, block.common.background_color.handle.g);
+    try std.testing.expectEqual(12, block.common.background_color.handle.b);
+    try std.testing.expectEqual(255, block.common.background_color.handle.a);
+}
