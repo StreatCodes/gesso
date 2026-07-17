@@ -1,11 +1,12 @@
 const std = @import("std");
 const SliceReader = @import("util/SliceReader.zig");
 
-const ParserError = error{
+const Error = error{
     UnexpectedToken,
     ExpectedTag,
     ExpectedClosingTag,
     ExpectedClosingBracket,
+    NameRequired,
 };
 
 const Attributes = std.StringHashMap([]const u8);
@@ -42,7 +43,7 @@ pub fn parse(allocator: std.mem.Allocator, text: []const u8) !Document {
     return document;
 }
 
-const PError = std.mem.Allocator.Error || ParserError;
+const PError = std.mem.Allocator.Error || Error;
 fn logError(reader: SliceReader, message: PError) void {
     const c = if (reader.offset < reader.slice.len) reader.slice[reader.offset] else reader.slice[reader.slice.len - 1];
     std.debug.print("{}, found '{c}'\n", .{ message, c });
@@ -83,15 +84,16 @@ fn readChildren(allocator: std.mem.Allocator, reader: *SliceReader) PError![]Ele
 }
 
 fn readTag(allocator: std.mem.Allocator, reader: *SliceReader) !Tag {
-    reader.must('<') orelse return ParserError.ExpectedTag;
+    reader.must('<') orelse return Error.ExpectedTag;
     const name = reader.readWhile(isName);
+    if (name.len == 0) return Error.NameRequired;
     const attributes = try readAttributes(allocator, reader);
 
-    const closing = reader.get() orelse return ParserError.ExpectedClosingBracket;
+    const closing = reader.get() orelse return Error.ExpectedClosingBracket;
 
     // self closing tag e.g. <input />
     if (closing == '/') {
-        reader.must('>') orelse return ParserError.ExpectedClosingBracket;
+        reader.must('>') orelse return Error.ExpectedClosingBracket;
         return .{
             .name = name,
             .attributes = attributes,
@@ -101,9 +103,9 @@ fn readTag(allocator: std.mem.Allocator, reader: *SliceReader) !Tag {
 
     if (closing == '>') {
         const children = try readChildren(allocator, reader);
-        reader.mustSlice("</") orelse return ParserError.ExpectedClosingTag;
-        reader.mustSlice(name) orelse return ParserError.ExpectedClosingTag;
-        reader.must('>') orelse return ParserError.ExpectedClosingTag;
+        reader.mustSlice("</") orelse return Error.ExpectedClosingTag;
+        reader.mustSlice(name) orelse return Error.ExpectedClosingTag;
+        reader.must('>') orelse return Error.ExpectedClosingTag;
 
         return .{
             .name = name,
@@ -112,7 +114,7 @@ fn readTag(allocator: std.mem.Allocator, reader: *SliceReader) !Tag {
         };
     }
 
-    return ParserError.ExpectedClosingBracket;
+    return Error.ExpectedClosingBracket;
 }
 
 fn readAttributes(allocator: std.mem.Allocator, reader: *SliceReader) !Attributes {
@@ -123,7 +125,7 @@ fn readAttributes(allocator: std.mem.Allocator, reader: *SliceReader) !Attribute
         const name = reader.readWhile(isName);
         if (name.len == 0) break;
 
-        reader.mustSlice("=\"") orelse return ParserError.UnexpectedToken;
+        reader.mustSlice("=\"") orelse return Error.UnexpectedToken;
         const value = reader.readUntilScalarExcluding('"');
         try attributes.put(name, value);
     }
@@ -226,9 +228,9 @@ test "can parse mixed text and tag elements" {
     try std.testing.expectEqualStrings("dog!", text_children[6].text);
 }
 
-test "returns error when document is malformed" {
-    const text = "<";
+test "returns error an element is added with no name" {
+    const text = "<></>";
     const result = parse(std.testing.allocator, text);
 
-    try std.testing.expectError(ParserError.ExpectedClosingBracket, result);
+    try std.testing.expectError(Error.NameRequired, result);
 }

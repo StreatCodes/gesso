@@ -5,7 +5,8 @@ const styles = @import("styles.zig");
 const Block = @import("nodes/Block.zig");
 const Text = @import("nodes/Text.zig");
 
-const Error = error{
+pub const Error = error{
+    UnexpectedText,
     InvalidTextChild,
     UnknownNode,
 };
@@ -40,7 +41,7 @@ pub fn elementToNode(allocator: std.mem.Allocator, element: parser.Element) NErr
             return try Node.fromTag(allocator, tag);
         },
         .text => {
-            return Error.InvalidTextChild;
+            return Error.UnexpectedText;
         },
     }
 }
@@ -57,7 +58,7 @@ pub const Node = union(enum) {
 
         switch (node) {
             .block => return .{ .block = try Block.fromTag(allocator, tag) },
-            .text => return .{ .text = Text.fromTag(tag) },
+            .text => return .{ .text = try Text.fromTag(allocator, tag) },
         }
     }
 };
@@ -69,3 +70,69 @@ pub const Common = struct {
     width: styles.Size = .auto,
     height: styles.Size = .auto,
 };
+
+test "a tree is generated for the most basic empty block element" {
+    const document = try parser.parse(std.testing.allocator, "<block></block>");
+    defer document.deinit();
+    const tree = try fromDocument(std.testing.allocator, document);
+    defer tree.deinit();
+
+    try std.testing.expectEqual(1, tree.root.children.items.len);
+    const node = tree.root.children.items[0];
+
+    try std.testing.expectEqual(node.block.children.items.len, 0);
+}
+
+test "a block containing a basic text" {
+    const document = try parser.parse(std.testing.allocator, "<block><text>hello, world!</text></block>");
+    defer document.deinit();
+    const tree = try fromDocument(std.testing.allocator, document);
+    defer tree.deinit();
+
+    try std.testing.expectEqual(1, tree.root.children.items.len);
+    const block = tree.root.children.items[0].block;
+
+    try std.testing.expectEqual(block.children.items.len, 1);
+    const text = block.children.items[0].text;
+
+    try std.testing.expectEqual(text.parts.items.len, 1);
+    const text_part = text.parts.items[0];
+
+    try std.testing.expectEqualStrings("hello, world!", text_part.content);
+    try std.testing.expectEqual(Text.Format{}, text_part.format);
+}
+
+test "a text node with formatting is correctly applied" {
+    const document_text = "<text>The quick <b>brown</b> fox <u><i>jumped</i> over the </u> <s>lazy</s> dog!</text>";
+    const document = try parser.parse(std.testing.allocator, document_text);
+    defer document.deinit();
+    const tree = try fromDocument(std.testing.allocator, document);
+    defer tree.deinit();
+
+    try std.testing.expectEqual(1, tree.root.children.items.len);
+    const text = tree.root.children.items[0].text;
+
+    try std.testing.expectEqual(7, text.parts.items.len);
+
+    const parts = text.parts.items;
+    try std.testing.expectEqualStrings("The quick", parts[0].content);
+    try std.testing.expectEqual(Text.Format{}, parts[0].format);
+
+    try std.testing.expectEqualStrings("brown", parts[1].content);
+    try std.testing.expectEqual(Text.Format{ .bold = true }, parts[1].format);
+
+    try std.testing.expectEqualStrings("fox", parts[2].content);
+    try std.testing.expectEqual(Text.Format{}, parts[2].format);
+
+    try std.testing.expectEqualStrings("jumped", parts[3].content);
+    try std.testing.expectEqual(Text.Format{ .underline = true, .italic = true }, parts[3].format);
+
+    try std.testing.expectEqualStrings("over the", parts[4].content);
+    try std.testing.expectEqual(Text.Format{ .underline = true }, parts[4].format);
+
+    try std.testing.expectEqualStrings("lazy", parts[5].content);
+    try std.testing.expectEqual(Text.Format{ .strike_through = true }, parts[5].format);
+
+    try std.testing.expectEqualStrings("dog!", parts[6].content);
+    try std.testing.expectEqual(Text.Format{}, parts[6].format);
+}
