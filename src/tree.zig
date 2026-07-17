@@ -78,6 +78,15 @@ pub const Common = struct {
         if (attributes.get("background_color")) |bg| {
             common.background_color = try .fromString(bg);
         }
+        if (attributes.get("margin")) |margin| {
+            common.margin = try .fromString(margin);
+        }
+        if (attributes.get("width")) |width| {
+            common.width = try .fromString(width);
+        }
+        if (attributes.get("height")) |height| {
+            common.height = try .fromString(height);
+        }
 
         return common;
     }
