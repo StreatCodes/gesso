@@ -31,10 +31,9 @@ pub fn render(renderer: *Renderer, allocator: std.mem.Allocator, tree: Tree, wid
     defer quads.deinit(allocator);
     _ = try tree.root.layout(allocator, .{ .x = 0, .y = 0, .w = width, .h = null }, &quads);
 
-    //TODO render quads
-
-    try renderer.handle.setDrawColor(.{ .r = 255, .g = 0, .b = 255, .a = 255 });
-    try renderer.handle.renderFillRect(.{ .x = 0, .y = 0, .w = 100, .h = 200 });
+    for (quads.items) |quad| {
+        try quad.render(renderer.handle);
+    }
 
     try text.render(renderer.handle, &renderer.glyph_atlas, "The quick brown fox jumped over the lazy dog!", .{});
 

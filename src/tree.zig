@@ -109,7 +109,7 @@ pub const Node = union(enum) {
 
 pub const Common = struct {
     id: ?u32 = null,
-    background_color: styles.Color = .{ .handle = .{ .r = 0, .g = 0, .b = 0, .a = 255 } },
+    background_color: styles.Color = .{ .handle = .{ .r = 0, .g = 0, .b = 0, .a = 0 } },
     padding: styles.Padding = .{},
     width: styles.Size = .auto,
     height: styles.Size = .auto,

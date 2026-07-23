@@ -32,14 +32,16 @@ pub fn layout(block: Block, allocator: std.mem.Allocator, parent_box: tree.Bound
             .w = box.w,
             .h = box.h orelse 0,
         },
+        .background_color = block.common.background_color.handle,
     });
     const quad_index = quads.items.len - 1;
 
-    const inner_box = box.applyPadding(block.common.padding);
+    var inner_box = box.applyPadding(block.common.padding);
     var cursor = inner_box.y;
     for (block.children.items) |child| {
         const child_box = try child.layout(allocator, inner_box, quads);
         cursor += child_box.h.?;
+        inner_box.y = cursor;
     }
 
     // Update the quad and bounding box height now we know the size of all the children
