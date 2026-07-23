@@ -1,6 +1,7 @@
 const std = @import("std");
 const parser = @import("parser.zig");
 const styles = @import("styles.zig");
+const Quad = @import("Renderer/Quad.zig");
 
 const Block = @import("nodes/Block.zig");
 const Text = @import("nodes/Text.zig");
@@ -45,6 +46,43 @@ pub fn elementToNode(allocator: std.mem.Allocator, element: parser.Element) anye
     }
 }
 
+pub const BoundingBox = struct {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: ?f32 = null,
+
+    pub fn applyPadding(box: BoundingBox, padding: styles.Padding) BoundingBox {
+        var new = box;
+        if (padding.left == .px) {
+            new.x += @floatFromInt(padding.left.px);
+            new.w -= @floatFromInt(padding.left.px);
+        }
+        if (padding.top == .px) {
+            new.y += @floatFromInt(padding.top.px);
+            if (box.h != null) new.h.? -= @floatFromInt(padding.top.px);
+        }
+        if (padding.right == .px) new.w -= @floatFromInt(padding.right.px);
+        if (padding.bottom == .px and new.h != null) new.h.? -= @floatFromInt(padding.bottom.px);
+
+        return new;
+    }
+
+    pub fn applySize(box: BoundingBox, width: styles.Size, height: styles.Size) BoundingBox {
+        var new = box;
+        switch (width) {
+            .px => |px| new.w = @floatFromInt(px),
+            .auto => {},
+        }
+        switch (height) {
+            .px => |px| new.h = @floatFromInt(px),
+            .auto => {},
+        }
+
+        return new;
+    }
+};
+
 pub const Node = union(enum) {
     block: Block,
     text: Text,
@@ -60,12 +98,19 @@ pub const Node = union(enum) {
             .text => return .{ .text = try Text.fromTag(allocator, tag) },
         }
     }
+
+    pub fn layout(node: Node, allocator: std.mem.Allocator, bbox: BoundingBox, quads: *std.ArrayList(Quad)) std.mem.Allocator.Error!BoundingBox {
+        switch (node) {
+            .block => |block| return try block.layout(allocator, bbox, quads),
+            .text => |text| return try text.layout(allocator, bbox, quads),
+        }
+    }
 };
 
 pub const Common = struct {
     id: ?u32 = null,
     background_color: styles.Color = .{ .handle = .{ .r = 0, .g = 0, .b = 0, .a = 255 } },
-    margin: styles.Margin = .{},
+    padding: styles.Padding = .{},
     width: styles.Size = .auto,
     height: styles.Size = .auto,
 
@@ -78,8 +123,8 @@ pub const Common = struct {
         if (attributes.get("background_color")) |bg| {
             common.background_color = try .fromString(bg);
         }
-        if (attributes.get("margin")) |margin| {
-            common.margin = try .fromString(margin);
+        if (attributes.get("padding")) |padding| {
+            common.padding = try .fromString(padding);
         }
         if (attributes.get("width")) |width| {
             common.width = try .fromString(width);
@@ -159,7 +204,7 @@ test "a text node with formatting is correctly applied" {
 }
 
 test "element attributes popular the common Node data" {
-    const document = try parser.parse(std.testing.allocator, "<block id=\"100\" width=\"auto\" height=\"200px\" margin=\"300px auto\" background_color=\"#02140C\" />");
+    const document = try parser.parse(std.testing.allocator, "<block id=\"100\" width=\"auto\" height=\"200px\" padding=\"300px auto\" background_color=\"#02140C\" />");
     defer document.deinit();
     const tree = try fromDocument(std.testing.allocator, document);
     defer tree.deinit();
@@ -169,13 +214,30 @@ test "element attributes popular the common Node data" {
     try std.testing.expectEqual(.auto, block.common.width);
     try std.testing.expectEqual(200, block.common.height.px);
 
-    try std.testing.expectEqual(300, block.common.margin.top.px);
-    try std.testing.expectEqual(300, block.common.margin.bottom.px);
-    try std.testing.expectEqual(.auto, block.common.margin.left);
-    try std.testing.expectEqual(.auto, block.common.margin.right);
+    try std.testing.expectEqual(300, block.common.padding.top.px);
+    try std.testing.expectEqual(300, block.common.padding.bottom.px);
+    try std.testing.expectEqual(.auto, block.common.padding.left);
+    try std.testing.expectEqual(.auto, block.common.padding.right);
 
     try std.testing.expectEqual(2, block.common.background_color.handle.r);
     try std.testing.expectEqual(20, block.common.background_color.handle.g);
     try std.testing.expectEqual(12, block.common.background_color.handle.b);
     try std.testing.expectEqual(255, block.common.background_color.handle.a);
+}
+
+test "a basic block layout returns two quads" {
+    const document = try parser.parse(std.testing.allocator, "<block height=\"50px\" />");
+    defer document.deinit();
+    const tree = try fromDocument(std.testing.allocator, document);
+    defer tree.deinit();
+
+    const box = BoundingBox{ .x = 0, .y = 0, .w = 200, .h = 200 };
+    var quads: std.ArrayList(Quad) = .empty;
+    defer quads.deinit(std.testing.allocator);
+    _ = try tree.root.layout(std.testing.allocator, box, &quads);
+
+    // 2 quads due to the root implicit block Node
+    try std.testing.expectEqual(2, quads.items.len);
+    try std.testing.expectEqual(Quad{ .rect = .{ .x = 0, .y = 0, .w = 200, .h = 200 } }, quads.items[0]);
+    try std.testing.expectEqual(Quad{ .rect = .{ .x = 0, .y = 0, .w = 200, .h = 50 } }, quads.items[1]);
 }

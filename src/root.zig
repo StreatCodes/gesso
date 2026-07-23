@@ -3,7 +3,6 @@ const sdl3 = @import("sdl3");
 const video = sdl3.video;
 const events = sdl3.events;
 const tree = @import("tree.zig");
-const layout = @import("layout.zig");
 const parser = @import("parser.zig");
 const Renderer = @import("Renderer.zig");
 
@@ -41,15 +40,9 @@ const Instance = struct {
             else => true,
         };
 
-        // instance.tree.root.render(width: f32)
+        const width, const height = try instance.window.getSize(); //TODO not sure if correct size
 
-        const width, _ = try instance.window.getSize(); //TODO not sure if correct size
-        _ = width;
-        _ = allocator;
-        // const quads = try layout.flatten(allocator, instance.tree, @floatFromInt(width));
-        // defer allocator.free(quads);
-
-        try instance.renderer.render(instance.tree);
+        try instance.renderer.render(allocator, instance.tree, @floatFromInt(width), @floatFromInt(height));
 
         return should_close;
     }

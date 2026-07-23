@@ -1,6 +1,7 @@
 const std = @import("std");
 const tree = @import("../tree.zig");
 const parser = @import("../parser.zig");
+const Quad = @import("../Renderer/Quad.zig");
 
 const Text = @This();
 
@@ -58,4 +59,12 @@ fn resolveParts(allocator: std.mem.Allocator, parts: *std.ArrayList(Part), forma
             });
         },
     }
+}
+
+pub fn layout(text: Text, allocator: std.mem.Allocator, bbox: tree.BoundingBox, quads: *std.ArrayList(Quad)) !tree.BoundingBox {
+    _ = allocator;
+    _ = text;
+    _ = quads;
+
+    return tree.BoundingBox{ .x = bbox.x, .y = bbox.y, .w = 20, .h = 20 }; //TODO real values
 }

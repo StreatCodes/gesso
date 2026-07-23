@@ -4,7 +4,7 @@ const sdl3 = @import("sdl3");
 pub const Error = error{
     InvalidColor,
     InvalidSize,
-    InvalidMargin,
+    InvalidPadding,
 };
 
 pub const Color = struct {
@@ -41,13 +41,13 @@ pub const Size = union(enum) {
     }
 };
 
-pub const Margin = struct {
+pub const Padding = struct {
     top: Size = .{ .px = 0 },
     right: Size = .{ .px = 0 },
     bottom: Size = .{ .px = 0 },
     left: Size = .{ .px = 0 },
 
-    pub fn fromString(str: []const u8) !Margin {
+    pub fn fromString(str: []const u8) !Padding {
         const part_count = std.mem.countScalar(u8, str, ' ') + 1;
         var parts_iter = std.mem.splitScalar(u8, str, ' ');
 
@@ -81,6 +81,6 @@ pub const Margin = struct {
             };
         }
 
-        return Error.InvalidMargin;
+        return Error.InvalidPadding;
     }
 };
