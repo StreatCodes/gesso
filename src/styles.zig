@@ -26,7 +26,7 @@ pub const Color = struct {
 
 pub const Size = union(enum) {
     /// Fixed size in pixels
-    px: u32,
+    px: f32,
     /// Size to content
     auto,
 
@@ -37,7 +37,7 @@ pub const Size = union(enum) {
         if (!std.mem.endsWith(u8, str, "px")) return Error.InvalidSize;
         const value = str[0 .. str.len - 2];
 
-        return .{ .px = try std.fmt.parseInt(u32, value, 10) };
+        return .{ .px = try std.fmt.parseFloat(f32, value) };
     }
 };
 

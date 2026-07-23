@@ -55,15 +55,15 @@ pub const BoundingBox = struct {
     pub fn applyPadding(box: BoundingBox, padding: styles.Padding) BoundingBox {
         var new = box;
         if (padding.left == .px) {
-            new.x += @floatFromInt(padding.left.px);
-            new.w -= @floatFromInt(padding.left.px);
+            new.x += padding.left.px;
+            new.w -= padding.left.px;
         }
         if (padding.top == .px) {
-            new.y += @floatFromInt(padding.top.px);
-            if (box.h != null) new.h.? -= @floatFromInt(padding.top.px);
+            new.y += padding.top.px;
+            if (box.h != null) new.h.? -= padding.top.px;
         }
-        if (padding.right == .px) new.w -= @floatFromInt(padding.right.px);
-        if (padding.bottom == .px and new.h != null) new.h.? -= @floatFromInt(padding.bottom.px);
+        if (padding.right == .px) new.w -= padding.right.px;
+        if (padding.bottom == .px and new.h != null) new.h.? -= padding.bottom.px;
 
         return new;
     }
@@ -71,11 +71,11 @@ pub const BoundingBox = struct {
     pub fn applySize(box: BoundingBox, width: styles.Size, height: styles.Size) BoundingBox {
         var new = box;
         switch (width) {
-            .px => |px| new.w = @floatFromInt(px),
+            .px => |px| new.w = px,
             .auto => {},
         }
         switch (height) {
-            .px => |px| new.h = @floatFromInt(px),
+            .px => |px| new.h = px,
             .auto => {},
         }
 
@@ -204,7 +204,7 @@ test "a text node with formatting is correctly applied" {
 }
 
 test "element attributes popular the common Node data" {
-    const document = try parser.parse(std.testing.allocator, "<block id=\"100\" width=\"auto\" height=\"200px\" padding=\"300px auto\" background_color=\"#02140C\" />");
+    const document = try parser.parse(std.testing.allocator, "<block id=\"100\" width=\"auto\" height=\"200.5px\" padding=\"300px auto\" background_color=\"#02140C\" />");
     defer document.deinit();
     const tree = try fromDocument(std.testing.allocator, document);
     defer tree.deinit();
@@ -212,7 +212,7 @@ test "element attributes popular the common Node data" {
     const block = tree.root.children.items[0].block;
     try std.testing.expectEqual(100, block.common.id);
     try std.testing.expectEqual(.auto, block.common.width);
-    try std.testing.expectEqual(200, block.common.height.px);
+    try std.testing.expectEqual(200.5, block.common.height.px);
 
     try std.testing.expectEqual(300, block.common.padding.top.px);
     try std.testing.expectEqual(300, block.common.padding.bottom.px);

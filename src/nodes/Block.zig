@@ -46,7 +46,7 @@ pub fn layout(block: Block, allocator: std.mem.Allocator, parent_box: tree.Bound
     if (box.h == null) {
         box.h = cursor;
         if (block.common.padding.bottom == .px) {
-            box.h.? += @floatFromInt(block.common.padding.bottom.px);
+            box.h.? += block.common.padding.bottom.px;
         }
         quads.items[quad_index].rect.h = box.h.?;
     }
