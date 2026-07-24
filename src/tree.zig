@@ -7,6 +7,7 @@ const Block = @import("nodes/Block.zig");
 const Text = @import("nodes/Text.zig");
 
 pub const Error = error{
+    SingleChildRequired,
     UnexpectedText,
     InvalidTextChild,
     UnknownNode,
@@ -14,7 +15,7 @@ pub const Error = error{
 
 pub const Tree = struct {
     arena: std.heap.ArenaAllocator,
-    root: Block = Block{},
+    root: Node,
 
     pub fn deinit(tree: Tree) void {
         tree.arena.deinit();
@@ -24,13 +25,12 @@ pub const Tree = struct {
 pub fn fromDocument(allocator: std.mem.Allocator, document: parser.Document) !Tree {
     var tree = Tree{
         .arena = std.heap.ArenaAllocator.init(allocator),
+        .root = undefined,
     };
     const arena = tree.arena.allocator();
 
-    for (document.children) |element| {
-        const node = try elementToNode(arena, element);
-        try tree.root.children.append(arena, node);
-    }
+    if (document.children.len != 1) return Error.SingleChildRequired;
+    tree.root = try elementToNode(arena, document.children[0]);
 
     return tree;
 }
@@ -143,10 +143,10 @@ test "a tree is generated for the most basic empty block element" {
     const tree = try fromDocument(std.testing.allocator, document);
     defer tree.deinit();
 
-    try std.testing.expectEqual(1, tree.root.children.items.len);
-    const node = tree.root.children.items[0];
+    try std.testing.expectEqual(.block, std.meta.activeTag(tree.root));
+    const block = tree.root.block;
 
-    try std.testing.expectEqual(node.block.children.items.len, 0);
+    try std.testing.expectEqual(block.children.items.len, 0);
 }
 
 test "a block containing a basic text" {
@@ -155,9 +155,7 @@ test "a block containing a basic text" {
     const tree = try fromDocument(std.testing.allocator, document);
     defer tree.deinit();
 
-    try std.testing.expectEqual(1, tree.root.children.items.len);
-    const block = tree.root.children.items[0].block;
-
+    const block = tree.root.block;
     try std.testing.expectEqual(block.children.items.len, 1);
     const text = block.children.items[0].text;
 
@@ -175,9 +173,7 @@ test "a text node with formatting is correctly applied" {
     const tree = try fromDocument(std.testing.allocator, document);
     defer tree.deinit();
 
-    try std.testing.expectEqual(1, tree.root.children.items.len);
-    const text = tree.root.children.items[0].text;
-
+    const text = tree.root.text;
     try std.testing.expectEqual(7, text.parts.items.len);
 
     const parts = text.parts.items;
@@ -209,7 +205,7 @@ test "element attributes popular the common Node data" {
     const tree = try fromDocument(std.testing.allocator, document);
     defer tree.deinit();
 
-    const block = tree.root.children.items[0].block;
+    const block = tree.root.block;
     try std.testing.expectEqual(100, block.common.id);
     try std.testing.expectEqual(.auto, block.common.width);
     try std.testing.expectEqual(200.5, block.common.height.px);
@@ -236,8 +232,6 @@ test "a basic block layout returns two quads" {
     defer quads.deinit(std.testing.allocator);
     _ = try tree.root.layout(std.testing.allocator, box, &quads);
 
-    // 2 quads due to the root implicit block Node
-    try std.testing.expectEqual(2, quads.items.len);
-    try std.testing.expectEqual(Quad{ .rect = .{ .x = 0, .y = 0, .w = 200, .h = 200 } }, quads.items[0]);
-    try std.testing.expectEqual(Quad{ .rect = .{ .x = 0, .y = 0, .w = 200, .h = 50 } }, quads.items[1]);
+    try std.testing.expectEqual(1, quads.items.len);
+    try std.testing.expectEqual(Quad{ .rect = .{ .x = 0, .y = 0, .w = 200, .h = 50 } }, quads.items[0]);
 }
