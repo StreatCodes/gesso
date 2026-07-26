@@ -1,29 +1,29 @@
 const std = @import("std");
 const sdl3 = @import("sdl3");
 const Tree = @import("tree.zig").Tree;
-const text = @import("Renderer/text.zig");
-const GlyphAtlas = @import("Renderer/GlyphAtlas.zig");
+const glyph_atlas = @import("Renderer/glyph_atlas.zig");
 const Quad = @import("Renderer/Quad.zig");
 
 const Renderer = @This();
 
 handle: sdl3.render.Renderer,
-glyph_atlas: GlyphAtlas,
 
 pub fn init(allocator: std.mem.Allocator, window: sdl3.video.Window) !Renderer {
-    return .{
+    const renderer = Renderer{
         .handle = try sdl3.render.Renderer.init(window, null),
-        .glyph_atlas = try GlyphAtlas.init(allocator),
     };
+
+    try glyph_atlas.init(allocator, renderer.handle);
+    return renderer;
 }
 
 pub fn deinit(renderer: *Renderer) void {
-    renderer.glyph_atlas.deinit();
+    glyph_atlas.deinit();
     renderer.handle.deinit();
 }
 
 pub fn render(renderer: *Renderer, allocator: std.mem.Allocator, tree: Tree, width: f32, height: f32) !void {
-    try renderer.handle.setDrawColor(.{ .r = 20, .g = 20, .b = 20, .a = 255 });
+    try renderer.handle.setDrawColor(.{ .r = 0, .g = 0, .b = 0, .a = 255 });
     try renderer.handle.clear();
 
     _ = height; //TODO maybe pass into the bounding box?
@@ -34,8 +34,8 @@ pub fn render(renderer: *Renderer, allocator: std.mem.Allocator, tree: Tree, wid
     for (quads.items) |quad| {
         try quad.render(renderer.handle);
     }
+}
 
-    try text.render(renderer.handle, &renderer.glyph_atlas, "The quick brown fox jumped over the lazy dog!", .{});
-
+pub fn present(renderer: *Renderer) !void {
     try renderer.handle.present();
 }

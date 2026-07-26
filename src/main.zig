@@ -7,7 +7,8 @@ pub fn main(init: std.process.Init) !void {
     const document =
         \\<block>
         \\  <block background_color="#2255ff" width="400px" height="200px" />
-        \\  <block  background_color="#8800ee" width="500px" height="300px" />
+        \\  <block background_color="#8800ee" width="500px" height="300px" />
+        \\  <text background_color="#ff9922">Hello, world!</text>
         \\</block>
     ;
 

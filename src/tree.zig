@@ -99,7 +99,7 @@ pub const Node = union(enum) {
         }
     }
 
-    pub fn layout(node: Node, allocator: std.mem.Allocator, bbox: BoundingBox, quads: *std.ArrayList(Quad)) std.mem.Allocator.Error!BoundingBox {
+    pub fn layout(node: Node, allocator: std.mem.Allocator, bbox: BoundingBox, quads: *std.ArrayList(Quad)) anyerror!BoundingBox {
         switch (node) {
             .block => |block| return try block.layout(allocator, bbox, quads),
             .text => |text| return try text.layout(allocator, bbox, quads),

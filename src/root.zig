@@ -43,6 +43,7 @@ const Instance = struct {
         const width, const height = try instance.window.getSize(); //TODO not sure if correct size
 
         try instance.renderer.render(allocator, instance.tree, @floatFromInt(width), @floatFromInt(height));
+        try instance.renderer.present();
 
         return should_close;
     }
