@@ -105,6 +105,10 @@ pub fn layoutText(allocator: std.mem.Allocator, parts: []Part, parent_box: tree.
 
         while (iter.nextCodepoint()) |codepoint| {
             const glyph = try atlas.get(codepoint);
+            if (cursor.x + @as(f32, @floatFromInt(glyph.advance)) > parent_box.x + parent_box.w) {
+                cursor.x = parent_box.x;
+                cursor.y += @floatFromInt(atlas.face_info.ascender);
+            }
             if (glyph.texture == null) {
                 cursor.x += @floatFromInt(glyph.advance);
                 continue;
@@ -130,7 +134,12 @@ pub fn layoutText(allocator: std.mem.Allocator, parts: []Part, parent_box: tree.
         }
     }
 
-    //TODO cursor.y, need to add height of final line
-    //TODO there is also a bug here, we need to subtract the parent_box from the resulting width and height
-    return .{ .x = parent_box.x, .y = parent_box.y, .w = cursor.x, .h = cursor.y };
+    cursor.y += @floatFromInt(atlas.face_info.ascender);
+
+    return .{
+        .x = parent_box.x,
+        .y = parent_box.y,
+        .w = if (cursor.y > parent_box.y) parent_box.w else cursor.x,
+        .h = cursor.y - parent_box.y,
+    };
 }
